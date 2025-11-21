@@ -24,9 +24,10 @@ class Settings(BaseSettings):
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEB_SERVER_PORT: int = Field(default=8080, alias="PORT")
 
-    # --- Database Settings (TO'G'RIDAN TO'G'RI MONGO_URL TALAB QILINADI) ---
-    # Endi alias ishlatilmaydi. Bu MONGO_URL ni Railway Variables ichiga qo'lda kiritish kerak degani.
-    MONGO_URL: str
+    # --- Database Settings (MONGO_URL ni to'g'ridan-to'g'ri MONGO_URL ga bog'lash) ---
+    # Bu MONGO_URL ni qo'lda kiritish o'rniga, Railway'ning avtomatik MongoDB servisidan olishga urinadi.
+    # Agar bu ishlamasa, u MONGO_PUBLIC_URL ni qidiradi.
+    MONGO_URL: str = Field(..., alias="MONGO_URL") 
     MONGO_DATABASE: str = "auto_reply_bot_db"
 
     # --- Validators ---
