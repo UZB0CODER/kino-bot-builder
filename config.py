@@ -24,10 +24,9 @@ class Settings(BaseSettings):
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEB_SERVER_PORT: int = Field(default=8080, alias="PORT")
 
-    # --- Database Settings (AVTOMATIK ULANISHNI TO'G'RILASH) ---
-    # MONGO_URL nomi PyDantic tomonidan talab qilinmoqda, lekin ulanish uchun
-    # Railway'ning haqiqiy ssilkasini beruvchi MONGO_PUBLIC_URL dan foydalanamiz.
-    MONGO_URL: str = Field(..., alias="MONGO_PUBLIC_URL") 
+    # --- Database Settings (TO'G'RIDAN TO'G'RI MONGO_URL TALAB QILINADI) ---
+    # Endi alias ishlatilmaydi. Bu MONGO_URL ni Railway Variables ichiga qo'lda kiritish kerak degani.
+    MONGO_URL: str
     MONGO_DATABASE: str = "auto_reply_bot_db"
 
     # --- Validators ---
