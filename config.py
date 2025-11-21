@@ -24,11 +24,10 @@ class Settings(BaseSettings):
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEB_SERVER_PORT: int = Field(default=8080, alias="PORT")
 
-    # --- Database Settings (Avtomatik ulanish) ---
-    # MONGO_URL nomi kerak emas, shuning uchun 'alias' orqali uni Railway bergan nomga bog'laymiz
-    # Agar Railway MongoDB servisida MONGO_URL yetsa, uni qo'lda kiritish shart emas.
-    # Agar sizning DB ssilkangiz DATABASE_URL nomi bilan berilgan bo'lsa, quyidagini ishlatamiz:
-    MONGO_URL: str = Field(..., alias="MONGO_URL") # Hozircha shu nomni qoldiramiz, lekin ulanishni tekshiramiz.
+    # --- Database Settings (AVTOMATIK ULANISHNI TO'G'RILASH) ---
+    # MONGO_URL nomi PyDantic tomonidan talab qilinmoqda, lekin ulanish uchun
+    # Railway'ning haqiqiy ssilkasini beruvchi MONGO_PUBLIC_URL dan foydalanamiz.
+    MONGO_URL: str = Field(..., alias="MONGO_PUBLIC_URL") 
     MONGO_DATABASE: str = "auto_reply_bot_db"
 
     # --- Validators ---
@@ -46,8 +45,9 @@ class Settings(BaseSettings):
 
     @property
     def WEBHOOK_URL(self) -> str:
+        # WEBHOOK_HOST dan 'https://'ni olib tashlash kerak emas, Railway uni o'zi to'g'ri beradi.
         host = self.WEBHOOK_HOST.rstrip('/')
-        return f"https://{host}{self.WEBHOOK_PATH}" # HTTPS qo'shildi
+        return f"https://{host}{self.WEBHOOK_PATH}" 
 
 # Sozlamalarni yuklaymiz va global obyekt yaratamiz
 CONFIG = Settings()
