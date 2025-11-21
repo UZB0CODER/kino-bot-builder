@@ -1,92 +1,96 @@
-import asyncio
-import logging
 import sys
-from contextlib import asynccontextmanager
-
-from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import CommandStart
-from aiogram.webhook.aiohttp_server import AiohttpAPIServer, SimpleRequestHandler
+import logging
 from aiohttp import web
+from aiogram import Bot, Dispatcher
+from aiogram.enums import ParseMode
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from config import settings
+# Loyiha modullari
+from config import CONFIG
+from db.mongo import db_service
+
+# Biz yaratgan routerlarni import qilamiz
+from handlers.admin_menu import admin_router
+from handlers.add_trigger import add_trigger_router
+from handlers.edit_trigger import edit_trigger_router
+from handlers.user_handler import user_router
+
+# Logging sozlash
+logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+
+# Bot va Dispatcher obyektlari
+bot = Bot(token=CONFIG.BOT_TOKEN, parse_mode=ParseMode.HTML)
+dp = Dispatcher()
+
+# --- ROUTERLARNI ULASH ---
+# Tartib juda muhim! Maxsus handlerlar oldin, umumiy handlerlar keyin turishi kerak.
+
+# 1. Admin menyusi va navigatsiyasi
+dp.include_router(admin_router)
+
+# 2. Yangi trigger qo'shish (Wizard)
+dp.include_router(add_trigger_router)
+
+# 3. Triggerlarni tahrirlash va o'chirish
+dp.include_router(edit_trigger_router)
+
+# 4. Oddiy foydalanuvchi handlerlari (Trigger qidirish)
+# DIQQAT: Bu router eng oxirida bo'lishi kerak, chunki u barcha matnli xabarlarni ushlaydi (@user_router.message())
+dp.include_router(user_router)
 
 
-# --- Main Application Logic ---
+# --- STARTUP / SHUTDOWN ---
 
-@asynccontextmanager
-async def lifespan(bot: Bot, dp: Dispatcher):
-    """
-    Context manager for application startup and shutdown logic.
-    Sets and deletes the webhook.
-    """
-    # On startup
-    webhook_url = settings.webhook_url
-    await bot.set_webhook(
-        url=webhook_url,
-        allowed_updates=dp.resolve_used_update_types(),
-        secret_token=None  # For simplicity, no secret token is used
-    )
-    logging.info(f"Webhook set to: {webhook_url}")
-    yield
-    # On shutdown
-    await bot.delete_webhook()
-    logging.info("Webhook deleted.")
-
-
-# --- Handlers ---
-
-async def start_handler(message: types.Message):
-    """
-    Handler for the /start command.
-    """
-    await message.answer("Bot is running! This is a test message.")
-
-
-# --- Main Function ---
-
-async def main():
-    """
-    Initializes and runs the bot application.
-    """
-    # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
-        stream=sys.stdout,
-    )
-
-    # Initialize Bot and Dispatcher
-    bot = Bot(token=settings.bot_token, parse_mode="HTML")
-    dp = Dispatcher()
-
-    # Register handlers
-    dp.message.register(start_handler, CommandStart())
-
-    # Create aiohttp web application
-    app = web.Application()
+async def on_startup(bot: Bot):
+    """Bot ishga tushganda bajariladigan ishlar"""
+    # 1. DB indekslarini yaratish (tezkor qidiruv uchun)
+    await db_service.create_indexes()
     
-    # Create an instance of the AiohttpAPIServer
-    webhook_server = AiohttpAPIServer(
+    # 2. Webhookni o'rnatish
+    # drop_pending_updates=True -> Bot o'chiq payti yig'ilib qolgan eski xabarlarni tashlab yuboradi
+    await bot.set_webhook(CONFIG.WEBHOOK_URL, drop_pending_updates=True)
+    
+    logging.info(f"🚀 Bot ishga tushdi! Webhook: {CONFIG.WEBHOOK_URL}")
+    logging.info(f"Adminlar: {CONFIG.ADMIN_IDS}")
+
+async def on_shutdown(bot: Bot):
+    """Bot to'xtaganda bajariladigan ishlar"""
+    # Webhookni o'chirish
+    await bot.delete_webhook()
+    logging.info("🛑 Webhook o'chirildi")
+    
+    # DB ulanishini yopish
+    db_service.client.close()
+    logging.info("MongoDB ulanishi yopildi")
+
+# --- MAIN SERVER ---
+
+def main():
+    # Aiohttp web ilovasini yaratish
+    app = web.Application()
+
+    # Dispatcher va Webhook handlerini sozlash
+    webhook_requests_handler = SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
-        # You can specify custom logic for handling updates here if needed
     )
+    
+    # Webhook URL ga handlerni ulash (masalan: /webhook)
+    webhook_requests_handler.register(app, path=CONFIG.WEBHOOK_PATH)
+    
+    # Aiogram kontekstini sozlash
+    setup_application(app, dp, bot=bot)
 
-    # Create a SimpleRequestHandler and register it on a specific path
-    webhook_handler = SimpleRequestHandler(
-        dispatcher=dp,
-        bot=bot,
-    )
-    webhook_handler.register(app, path=settings.webhook_path.format(bot_token=settings.bot_token))
+    # Startup va Shutdown hodisalarini ulash
+    app.on_startup.append(lambda app: on_startup(bot))
+    app.on_shutdown.append(lambda app: on_shutdown(bot))
 
-    # Mount the server on the application using a context manager
-    async with lifespan(bot, dp):
-        # Start the web server
-        await webhook_server.start(app)
-
+    # Serverni ishga tushirish
+    # CONFIG.WEB_SERVER_PORT Railway tomonidan berilgan PORT (yoki default 8080) bo'ladi
+    web.run_app(app, host=CONFIG.WEB_SERVER_HOST, port=CONFIG.WEB_SERVER_PORT)
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        main()
     except (KeyboardInterrupt, SystemExit):
-        logging.info("Bot stopped manually")
+        logging.info("Bot manually stopped")
