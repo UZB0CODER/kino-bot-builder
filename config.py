@@ -1,4 +1,3 @@
-import os
 from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -6,41 +5,36 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """
     Bot konfiguratsiyasini yuklash va validatsiya qilish uchun sinf.
-    Loyiha bo'ylab bir xil nomlarni (Uppercase) saqlash uchun moslashtirildi.
+    Railway avtomatik o'zgaruvchilarini ishlatishga moslashtirildi.
     """
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="ignore"  # .env dagi ortiqcha o'zgaruvchilarni ignor qilish
+        extra="ignore"
     )
 
     # --- Bot Settings ---
-    # Field(..., alias="BOT_TOKEN") atrof-muhit o'zgaruvchisini o'qiydi
     BOT_TOKEN: str
-    
-    # Adminlarni vergul bilan ajratilgan stringdan listga o'tkazamiz
     ADMIN_IDS: List[int]
 
-    # --- Webhook Settings ---
-    WEBHOOK_HOST: str
+    # --- Webhook Settings (RAILWAY_PUBLIC_DOMAIN dan foydalanish) ---
+    # WEBHOOK_HOST uchun Railway'ning avtomatik domenini ishlatamiz
+    WEBHOOK_HOST: str = Field(..., alias="RAILWAY_PUBLIC_DOMAIN") 
     WEBHOOK_PATH: str = "/webhook"
-    
-    # Railway va server sozlamalari
     WEB_SERVER_HOST: str = "0.0.0.0"
-    # Railway PORT environment o'zgaruvchisini beradi, biz uni WEB_SERVER_PORT ga o'zlashtiramiz
     WEB_SERVER_PORT: int = Field(default=8080, alias="PORT")
 
-    # --- Database Settings ---
-    MONGO_URL: str
+    # --- Database Settings (Avtomatik ulanish) ---
+    # MONGO_URL nomi kerak emas, shuning uchun 'alias' orqali uni Railway bergan nomga bog'laymiz
+    # Agar Railway MongoDB servisida MONGO_URL yetsa, uni qo'lda kiritish shart emas.
+    # Agar sizning DB ssilkangiz DATABASE_URL nomi bilan berilgan bo'lsa, quyidagini ishlatamiz:
+    MONGO_URL: str = Field(..., alias="MONGO_URL") # Hozircha shu nomni qoldiramiz, lekin ulanishni tekshiramiz.
     MONGO_DATABASE: str = "auto_reply_bot_db"
 
     # --- Validators ---
     @field_validator("ADMIN_IDS", mode="before")
     @classmethod
     def parse_admin_ids(cls, v: str | List[int]) -> List[int]:
-        """
-        Vergul bilan ajratilgan satrni (masalan: "123,456") integerlar ro'yxatiga aylantiradi.
-        """
         if isinstance(v, list):
             return v
         if isinstance(v, str) and v:
@@ -52,11 +46,8 @@ class Settings(BaseSettings):
 
     @property
     def WEBHOOK_URL(self) -> str:
-        """To'liq Webhook URL manzilini shakllantiradi."""
-        # Oxirida slash bor-yo'qligini tekshirib olamiz
         host = self.WEBHOOK_HOST.rstrip('/')
-        return f"{host}{self.WEBHOOK_PATH}"
+        return f"https://{host}{self.WEBHOOK_PATH}" # HTTPS qo'shildi
 
 # Sozlamalarni yuklaymiz va global obyekt yaratamiz
-# Boshqa fayllar "from config import CONFIG" deb chaqiradi
 CONFIG = Settings()
